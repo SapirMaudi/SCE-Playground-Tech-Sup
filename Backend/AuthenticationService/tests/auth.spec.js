@@ -6,7 +6,7 @@ import chaiHttp from 'chai-http';
 import chai from 'chai';
 import express from 'express';
 import bodyParser from 'body-parser';
-//import * as controller from '../src/controllers/techSupController.js';
+import * as controller from '../src/controllers/techSupController.js';
 import { initDB } from '../src/data-access/db.js';
 
 chai.use(chaiHttp);
@@ -14,7 +14,7 @@ chai.use(chaiHttp);
 // יצירת אפליקציה עם ראוטים
 const app = express();
 app.use(bodyParser.json());
-//app.use('/techsupport', controller.router); // נניח שייצאת router
+app.use('/techsupport', controller.router); // נניח שייצאת router
 
 // הפעלת השרת בפורט זמני
 let server;
