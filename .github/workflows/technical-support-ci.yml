@@ -1,16 +1,15 @@
 name: CI - Technical Support
 
 on:
-    push:
-      branches: [ "main" ]
-    pull_request:
-      branches: [ "main" ]
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
   build-and-test:
-
     runs-on: ubuntu-latest
-    
+
     env:
       DB_CON_STR: ${{ secrets.DB_CON_STR }}
 
@@ -23,15 +22,14 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: Backend/TechSupportService
-    
+
       - name: Run linter
         run: npm run lint
         working-directory: Backend/TechSupportService
-    
+
       - name: Run tests
         run: npm run test
         working-directory: Backend/TechSupportService
-        
 
   deploy-server:
     needs: [build-and-test]

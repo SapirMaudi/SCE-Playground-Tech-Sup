@@ -3,13 +3,13 @@ name: CI - Auth Service
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
-      - 'Backend/AuthenticationService/**'
+      - "Backend/AuthenticationService/**"
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
-      - 'Backend/AuthenticationService/**'
+      - "Backend/AuthenticationService/**"
 
 jobs:
   build-and-test:
@@ -38,7 +38,7 @@ jobs:
         run: |
           cd Backend/AuthenticationService
           npm test
-  
+
   deploy-to-render:
     runs-on: ubuntu-latest
     needs: build-and-test
@@ -46,4 +46,3 @@ jobs:
     steps:
       - name: Deploy to Render
         run: curl https://api.render.com/deploy/srv-cvk64qogjchc73c8gtu0?key=sY0-Rl9m3vA
-
