@@ -1,7 +1,8 @@
 import express, { json } from 'express';
 import cors from 'cors';
 import { getTechSuppot, deleteTicket, addTicket, editTicket, isAgent, addAgent, getRequestsFromOneUser,  getForumMessages,
-  postForumMessage, closeSupportRequest } from './controllers/techSupController.js';
+  postForumMessage, closeSupportRequest, 
+  editRatingOnDb} from './controllers/techSupController.js';
 import 'dotenv/config';
 
 const app = express();
@@ -21,6 +22,7 @@ app.get('/techsupportfetchuserrequests', getRequestsFromOneUser);
 app.get('/gettechsupportforum', getForumMessages);
 app.post('/posttechsupportforum', postForumMessage);
 app.patch('/techsupportcloserequest', closeSupportRequest);
+app.patch('/techsupportrate', editRatingOnDb);
 
 
 

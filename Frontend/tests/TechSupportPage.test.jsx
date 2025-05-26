@@ -1,7 +1,6 @@
 
 // Mocking the api.js service used inside TechSupportPage
-jest.mock('../src/services/api.js', () => {
-  return {
+jest.mock('../src/services/api.js', () => ({
     __esModule: true,
     default: {
       get: jest.fn((url) => {
@@ -59,8 +58,7 @@ jest.mock('../src/services/api.js', () => {
       post: jest.fn(() => Promise.resolve({ data: {} })),
       patch: jest.fn(() => Promise.resolve({ data: {} })),
     },
-  };
-});
+  }));
 
 import React from 'react';
 import api from '../src/services/api.js';

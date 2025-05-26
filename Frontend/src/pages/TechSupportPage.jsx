@@ -3,6 +3,18 @@ import { StoreContext } from '../store/StoreContext';
 import React, { useState, useEffect } from 'react';
 import api from '../services/api.js';
 import '../App.css';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+} from 'recharts';
 
 export default function TechSupportPage() {
   const { user } = useContext(StoreContext); // Gets the logged in user from the context
@@ -30,15 +42,64 @@ export default function TechSupportPage() {
   const [isLoadingRequests, setIsLoadingRequests] = useState(true);
   const [isLoadingAgentRequests, setIsLoadingAgentRequests] = useState(true);
 
+  // star rating
+  const [showRatingForm, setShowRatingForm] = useState(true);
+  const [rating, setRating] = useState(0);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
 
   // agent page requests.
   const [costumerReq, setCostumerReq] = useState([]);
 
+  // All requests from all users - for agent dashboard
+  const [tickets, setTickets] = useState([]);
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
+  const STATUS_COLORS = ['#0088FE', '#FFBB28', '#00C49F']; 
+  const RATING_COLORS = ['#8884d8', '#82ca9d', '#ffc658'];
+
   // page state modifier.
   const [pageState, setPageState] = useState(loadingScreen);
 
-  let tempUrl = '/ts/techsupportadd/?name=';
+  const tempUrl = '/ts/techsupportadd/?name=';
 
+  // Function to count the number of requests per status type
+  const getStatusData = () => {
+    // Initialize counters for each status
+    const counts = { open: 0, inProgress: 0, closed: 0 };
+
+    // Loop through all tickets and increment corresponding status counter
+    tickets.forEach((ticket) => {
+      if (ticket.status === 1) counts.open++;
+      else if (ticket.status === 2) counts.inProgress++;
+      else if (ticket.status === 3) counts.closed++;
+    });
+
+    // Return the data formatted for the PieChart
+    return [
+      { name: 'Open', value: counts.open },
+      { name: 'In Progress', value: counts.inProgress },
+      { name: 'Closed', value: counts.closed },
+    ];
+  };
+
+  // Function to count how many requests received each star rating
+  const getRatingData = () => {
+    // Initialize counters for each rating level
+    const counts = { oneStar: 0, twoStars: 0, threeStars: 0 };
+
+    // Loop through all tickets and count ratings of 1, 2, and 3
+    tickets.forEach((ticket) => {
+      if (ticket.rating === 1) counts.oneStar++;
+      else if (ticket.rating === 2) counts.twoStars++;
+      else if (ticket.rating === 3) counts.threeStars++;
+    });
+
+    // Return the data formatted for the BarChart
+    return [
+      { name: '1 Star', value: counts.oneStar },
+      { name: '2 Stars', value: counts.twoStars },
+      { name: '3 Stars', value: counts.threeStars },
+    ];
+  };
   // Loading messages from the server when a request is selected
   useEffect(() => {
     if (!selectedRequest) return;
@@ -67,11 +128,19 @@ export default function TechSupportPage() {
         // Prevent error if user or user.email is undefined
         return;
 
-      const res = await api.get('/ts/techsupportisagent/?email=' + user?.email);
+      const res = await api.get(`/ts/techsupportisagent/?email=${  user?.email}`);
 
-      if (res?.data.agent === true)
-        setPageState(agentPage); 
-      else setPageState(userPage);
+      if (res?.data.agent === true) {
+        setPageState(agentPage);
+        try {
+          const ticketRes = await api.get('/ts/techsupport');
+          setTickets(ticketRes.data);
+        } catch (e) {
+          console.error('Error loading dashboard tickets', e);
+        } finally {
+          setIsLoadingDashboard(false);
+        }
+      } else setPageState(userPage);
     }
 
     getPageType();
@@ -84,7 +153,9 @@ export default function TechSupportPage() {
         setIsLoadingAgentRequests(true);
         try {
           const res = await api.get('/ts/techsupport');
+
           res.data.sort((a, b) => a.urgency - b.urgency || a.id - b.id);
+
           setCostumerReq(res.data);
         } catch (err) {
           console.error(err);
@@ -93,11 +164,13 @@ export default function TechSupportPage() {
           setIsLoadingAgentRequests(false);
         }
       }
-  
+
       if (pageState === userPage) {
         setIsLoadingRequests(true);
         try {
-          const res = await api.get('/ts/techsupportfetchuserrequests/?email=' + user?.email);
+          const res = await api.get(
+            `/ts/techsupportfetchuserrequests/?email=${  user?.email}`
+          );
           setRequests(res.data.userRequest);
         } catch (err) {
           console.error(err);
@@ -107,9 +180,19 @@ export default function TechSupportPage() {
         }
       }
     }
-  
+
     fetchRequests();
   }, [pageState]);
+
+  useEffect(() => {
+    if (
+      selectedRequest &&
+      selectedRequest.status === 3 &&
+      !selectedRequest.rating
+    ) {
+      setShowRatingForm(true);
+    }
+  }, [selectedRequest]);
 
   // Function to determine color by content
   const getStatusColor = (status) => {
@@ -159,6 +242,9 @@ export default function TechSupportPage() {
         // Save updated ticket list to state
         setCostumerReq(updatedRes.data);
 
+        // So that the graphs on the dashboard will update automatically without refreshing
+        setTickets(updatedRes.data);
+
         // Find the updated version of the selected request (with updated status)
         const updated = updatedRes.data.find(
           (r) => r.id === selectedRequest.id
@@ -196,6 +282,9 @@ export default function TechSupportPage() {
       });
       setCostumerReq(updatedRes.data);
 
+      // So that the graphs on the dashboard will update automatically without refreshing
+      setTickets(updatedRes.data);
+
       // Update the selected request with new status (closed)
       const updated = updatedRes.data.find((r) => r.id === selectedRequest.id);
       if (updated) {
@@ -217,10 +306,13 @@ export default function TechSupportPage() {
   const [messageText, setMessageText] = useState('');
   const [messageColor, setMessageColor] = useState('');
 
-
   const handleRemoveImage = (indexToRemove) => {
-    setFiles(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
-    setPreviews(prevPreviews => prevPreviews.filter((_, index) => index !== indexToRemove));
+    setFiles((prevFiles) =>
+      prevFiles.filter((_, index) => index !== indexToRemove)
+    );
+    setPreviews((prevPreviews) =>
+      prevPreviews.filter((_, index) => index !== indexToRemove)
+    );
   };
 
   // Handle file change and preview
@@ -228,31 +320,31 @@ export default function TechSupportPage() {
     const newFiles = Array.from(e.target.files);
     const validFiles = [];
     const newPreviews = [];
-  
-    for (let file of newFiles) {
+
+    for (const file of newFiles) {
       // Stop if we already have 4 images total
       // if (files.length + validFiles.length >= 4) {
       //   setMessageText('You can upload up to 4 images only.');
       //   setMessageColor('red');
       //   break;
       // }
-  
+
       // Validate size
       if (file.size > 3 * 1024 * 1024) {
         setMessageText('Each image must be under 3MB.');
         setMessageColor('red');
         continue;
       }
-  
+
       // Validate type
       if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
         setMessageText('Only JPG, PNG, and GIF files are allowed.');
         setMessageColor('red');
         continue;
       }
-  
+
       validFiles.push(file);
-  
+
       // Load preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -263,7 +355,7 @@ export default function TechSupportPage() {
       };
       reader.readAsDataURL(file);
     }
-  
+
     if (validFiles.length > 0) {
       setFiles((prev) => [...prev, ...validFiles]);
       setMessageText('');
@@ -292,15 +384,13 @@ export default function TechSupportPage() {
   // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!userType || !issueCategory || description.leng1th < 10) {
+    if (!userType || !issueCategory || description.length < 10) {
       setMessageText('Please fill out all required fields correctly.');
       setMessageColor('red');
       return;
     }
 
-    if (description.length > 2000)
-    {
+    if (description.length > 2000) {
       setMessageText('Please enter a maximum of 2000 characters');
       setMessageColor('red');
       return;
@@ -312,7 +402,7 @@ export default function TechSupportPage() {
       return;
     }
 
-    for (let file of files) {
+    for (const file of files) {
       if (file.size > 3 * 1024 * 1024) {
         setMessageText('Each image must be under 3MB.');
         setMessageColor('red');
@@ -367,6 +457,10 @@ export default function TechSupportPage() {
       images: base64Images,
     });
 
+    // So that the graphs on the dashboard will update automatically without refreshing
+    const ticketRes = await api.get('/ts/techsupport');
+    setTickets(ticketRes.data);
+
     // const res = await api.post(
     //   '/ts/techsupportadd?type=' +
     //     uType +
@@ -414,112 +508,169 @@ export default function TechSupportPage() {
   if (pageState === agentPage) {
     return (
       <>
-        <div className='tech-agent-requests-page'>
-          <h2 className='tech-client-requests-page-title'>
-            Welcome agent: {user?.firstName}.
+        <div className="tech-agent-requests-page">
+          <h2 className="tech-client-requests-page-title">
+            Welcome agent: {user?.firstName}
           </h2>
-  
-          <div className='tech-agent-content'>
+
+          <div className="tech-agent-content">
             {/* LEFT PANEL: type === 1 */}
-            <div className='tech-left-agent-panel'>
-              <h2 className='tech-panel-title'>Customers</h2>
-  
-              <div className='tech-request-header-row'>
-                <span className='tech-request-cell'>Status</span>
-                <span className='tech-request-cell'>Category</span>
-                <span className='tech-request-cell'>Urgency</span>
-                <span className='tech-request-cell'>ID</span>
+            <div className="tech-left-agent-panel">
+              <h2 className="tech-panel-title">Customers</h2>
+
+              <div className="tech-request-header-row">
+                <span className="tech-request-cell">Status</span>
+                <span className="tech-request-cell">Category</span>
+                <span className="tech-request-cell">Urgency</span>
+                <span className="tech-request-cell">ID</span>
               </div>
-  
+
               {isLoadingAgentRequests ? (
-              <div className='tech-loading-messages'>
-                <div className='spinner'></div>
-                <p className='tech-loading-text'>Loading requests...</p>
-              </div>
-            ) : costumerReq.filter((req) => req.type === 1).length === 0 ? (
-              <p className='tech-no-requests'>No customer requests yet.</p>
-            ) : (
-              costumerReq
-                .filter((req) => req.type === 1)
-                .map((req) => (
-                  <div
-                    key={req.id}
-                    className='tech-request-row'
-                    onClick={() => setSelectedRequest(req)}
-                  >
-                    <span className='tech-request-cell'>
-                      <span
-                        className={`tech-status-circle ${getStatusColor(req.status)}`}
-                        style={{ marginRight: '8px' }}
-                      ></span>
-                    </span>
-                    <span className='tech-request-cell'>{req.category}</span>
-                    <span className='tech-request-cell'>{getUrgencyText(req.urgency)}</span>
-                    <span className='tech-request-cell tech-request-id'>Request #{req.id}</span>
-                  </div>
-                ))
-            )}
+                <div className="tech-loading-messages">
+                  <div className="spinner"></div>
+                  <p className="tech-loading-text">Loading requests...</p>
+                </div>
+              ) : costumerReq.filter((req) => req.type === 1).length === 0 ? (
+                <p className="tech-no-requests">No customer requests yet.</p>
+              ) : (
+                costumerReq
+                  .filter((req) => req.type === 1)
+                  .map((req) => (
+                    <div
+                      key={req.id}
+                      className="tech-request-row"
+                      onClick={() => setSelectedRequest(req)}
+                    >
+                      <span className="tech-request-cell">
+                        <span
+                          className={`tech-status-circle ${getStatusColor(
+                            req.status
+                          )}`}
+                          style={{ marginRight: '8px' }}
+                        ></span>
+                      </span>
+                      <span className="tech-request-cell">{req.category}</span>
+                      <span className="tech-request-cell">
+                        {getUrgencyText(req.urgency)}
+                      </span>
+                      <span className="tech-request-cell tech-request-id">
+                        Request #{req.id}
+                      </span>
+                    </div>
+                  ))
+              )}
             </div>
-  
+
             {/* RIGHT PANEL: type === 2 */}
-            <div className='tech-right-agent-panel'>
-              <h2 className='tech-panel-title'>Leads</h2>
-  
-              <div className='tech-request-header-row'>
-                <span className='tech-request-cell'>Status</span>
-                <span className='tech-request-cell'>Category</span>
-                <span className='tech-request-cell'>Urgency</span>
-                <span className='tech-request-cell'>ID</span>
+            <div className="tech-right-agent-panel">
+              <h2 className="tech-panel-title">Leads</h2>
+
+              <div className="tech-request-header-row">
+                <span className="tech-request-cell">Status</span>
+                <span className="tech-request-cell">Category</span>
+                <span className="tech-request-cell">Urgency</span>
+                <span className="tech-request-cell">ID</span>
               </div>
-  
+
               {isLoadingAgentRequests ? (
-              <div className='tech-loading-messages'>
-                <div className='spinner'></div>
-                <p className='tech-loading-text'>Loading requests...</p>
-              </div>
-            ) : costumerReq.filter((req) => req.type === 2).length === 0 ? (
-              <p className='tech-no-requests'>No lead requests yet.</p>
-            ) : (
-              costumerReq
-                .filter((req) => req.type === 2)
-                .map((req) => (
-                  <div
-                    key={req.id + '-lead'}
-                    className='tech-request-row'
-                    onClick={() => setSelectedRequest(req)}
-                  >
-                    <span className='tech-request-cell'>
-                      <span
-                        className={`tech-status-circle ${getStatusColor(req.status)}`}
-                        style={{ marginRight: '8px' }}
-                      ></span>
-                    </span>
-                    <span className='tech-request-cell'>{req.category}</span>
-                    <span className='tech-request-cell'>{getUrgencyText(req.urgency)}</span>
-                    <span className='tech-request-cell tech-request-id'>Request #{req.id}</span>
-                  </div>
-                ))
-            )}
+                <div className="tech-loading-messages">
+                  <div className="spinner"></div>
+                  <p className="tech-loading-text">Loading requests...</p>
+                </div>
+              ) : costumerReq.filter((req) => req.type === 2).length === 0 ? (
+                <p className="tech-no-requests">No lead requests yet.</p>
+              ) : (
+                costumerReq
+                  .filter((req) => req.type === 2)
+                  .map((req) => (
+                    <div
+                      key={`${req.id  }-lead`}
+                      className="tech-request-row"
+                      onClick={() => setSelectedRequest(req)}
+                    >
+                      <span className="tech-request-cell">
+                        <span
+                          className={`tech-status-circle ${getStatusColor(
+                            req.status
+                          )}`}
+                          style={{ marginRight: '8px' }}
+                        ></span>
+                      </span>
+                      <span className="tech-request-cell">{req.category}</span>
+                      <span className="tech-request-cell">
+                        {getUrgencyText(req.urgency)}
+                      </span>
+                      <span className="tech-request-cell tech-request-id">
+                        Request #{req.id}
+                      </span>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+          <div className="tech-graphs-panel">
+            <h3 className="tech-dashboard-total-requests">
+              Total Requests: {tickets.length}
+            </h3>
+
+            <div className="tech-dashboard-chart">
+              <h4>Status Distribution</h4>
+              <PieChart width={300} height={250}>
+                <Pie
+                  data={getStatusData()}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  dataKey="value"
+                  label
+                >
+                  {getStatusData().map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={['#4caf50', '#ff9800', '#f44336'][index % 3]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </div>
+
+            <div className="tech-dashboard-chart">
+              <h4>Ratings Breakdown</h4>
+              <BarChart width={300} height={250} data={getRatingData()}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="#8884d8">
+                  {getRatingData().map((entry, index) => (
+                    <Cell
+                      key={`cell-bar-${index}`}
+                      fill={['#f44336', '#ff9800', '#4caf50'][index % 3]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
             </div>
           </div>
         </div>
-  
+
         {/* POPUP OUTSIDE THE PANEL */}
         {selectedRequest && (
           <>
             <div
-              className='tech-view-request-overlay'
+              className="tech-view-request-overlay"
               onClick={() => {
                 setSelectedRequest(null);
                 setEnlargedImage(null);
               }}
             ></div>
-  
-            <div className='tech-view-request'>
-              <h3 className='tech-view-request-title'>
+            <div className="tech-view-request">
+              <h3 className="tech-view-request-title">
                 {selectedRequest.category || 'Request Category'}
               </h3>
-              <p className='tech-view-request-subtitle'>
+              <p className="tech-view-request-subtitle">
                 Date:{' '}
                 {selectedRequest.date
                   .replace('T', ' At ')
@@ -527,25 +678,25 @@ export default function TechSupportPage() {
                   .replace(/\.\d+$/, '') || 'Unknown'}{' '}
                 | Urgency: {getUrgencyText(selectedRequest.urgency)}
               </p>
-  
-              <div className='tech-view-request-history'>
+
+              <div className="tech-view-request-history">
                 {isLoadingMessages ? (
-                  <div className='tech-loading-messages'>
-                    <div className='spinner'></div>
-                    <p className='tech-loading-text'>Loading messages...</p>
+                  <div className="tech-loading-messages">
+                    <div className="spinner"></div>
+                    <p className="tech-loading-text">Loading messages...</p>
                   </div>
                 ) : (
                   forumMessages.map((msg, idx) => (
-                    <p key={idx} className='tech-view-request-message'>
-                      <span className='tech-bold-label'>{msg.name}:</span>{' '}
+                    <p key={idx} className="tech-view-request-message">
+                      <span className="tech-bold-label">{msg.name}:</span>{' '}
                       {msg.content}
                     </p>
                   ))
                 )}
               </div>
-  
+
               {selectedRequest.imgs && selectedRequest.imgs.length > 0 && (
-                <div className='tech-view-request-images'>
+                <div className="tech-view-request-images">
                   {selectedRequest.imgs.map((img, index) => {
                     if (!img || !img.data) return null;
                     const base64String = btoa(
@@ -559,30 +710,30 @@ export default function TechSupportPage() {
                         key={index}
                         src={`data:image/jpeg;base64,${base64String}`}
                         alt={`Uploaded ${index + 1}`}
-                        className='tech-view-request-image'
+                        className="tech-view-request-image"
                         onClick={() => setEnlargedImage(base64String)}
                       />
                     );
                   })}
                 </div>
               )}
-  
+
               {enlargedImage && (
                 <div
-                  className='tech-image-modal'
+                  className="tech-image-modal"
                   onClick={() => setEnlargedImage(null)}
                 >
                   <div
-                    className='tech-image-modal-content'
+                    className="tech-image-modal-content"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <img
                       src={`data:image/jpeg;base64,${enlargedImage}`}
-                      alt='Enlarged'
-                      className='tech-image-enlarged'
+                      alt="Enlarged"
+                      className="tech-image-enlarged"
                     />
                     <button
-                      className='tech-image-close-btn'
+                      className="tech-image-close-btn"
                       onClick={() => setEnlargedImage(null)}
                     >
                       ×
@@ -590,27 +741,27 @@ export default function TechSupportPage() {
                   </div>
                 </div>
               )}
-  
+
               {selectedRequest.status !== 3 ? (
                 <>
                   <textarea
-                    className='tech-view-request-textbox'
-                    placeholder='Write your reply here...'
+                    className="tech-view-request-textbox"
+                    placeholder="Write your reply here..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                   />
-  
-                  <div className='tech-view-request-buttons'>
+
+                  <div className="tech-view-request-buttons">
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={handleSendMessage}
                       disabled={!newMessage.trim()}
                     >
                       Send
                     </button>
-  
+
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={() => {
                         setSelectedRequest(null);
                         setEnlargedImage(null);
@@ -618,9 +769,9 @@ export default function TechSupportPage() {
                     >
                       Back
                     </button>
-  
+
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={handleCloseRequest}
                     >
                       Mark Request as Closed
@@ -629,12 +780,12 @@ export default function TechSupportPage() {
                 </>
               ) : (
                 <>
-                  <p className='tech-view-request-closed-msg'>
+                  <p className="tech-view-request-closed-msg">
                     This request is closed. No further messages can be sent.
                   </p>
-                  <div className='tech-view-request-buttons'>
+                  <div className="tech-view-request-buttons">
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={() => {
                         setSelectedRequest(null);
                         setEnlargedImage(null);
@@ -651,18 +802,21 @@ export default function TechSupportPage() {
       </>
     );
   }
-  
 
   if (pageState === addRequestPage) {
     return (
-      <div className='tech-form-container'>
-        <h1 className='tech-client-requests-page-title'>Contact Technical Support</h1>
- 
+      <div className="tech-form-container">
+        <h1 className="tech-client-requests-page-title">
+          Contact Technical Support
+        </h1>
+
         {formSubmittedSuccessfully ? (
           <div style={{ textAlign: 'center', marginTop: '40px' }}>
             <h2 style={{ color: 'green' }}>Thank you for contacting us!</h2>
-            <p>We have received your request and will get back to you shortly.</p>
-            <button className='tech-buttons' onClick={resetForm}>
+            <p>
+              We have received your request and will get back to you shortly.
+            </p>
+            <button className="tech-buttons" onClick={resetForm}>
               Back to My Requests
             </button>
           </div>
@@ -675,11 +829,11 @@ export default function TechSupportPage() {
               onChange={(e) => setUserType(e.target.value)}
               required
             >
-              <option value=''>Select...</option>
-              <option value='before'>Before Purchase</option>
-              <option value='after'>After Purchase</option>
+              <option value="">Select...</option>
+              <option value="before">Before Purchase</option>
+              <option value="after">After Purchase</option>
             </select>
- 
+
             {/* Issue Category */}
             <label>Issue Category:</label>
             <select
@@ -687,26 +841,31 @@ export default function TechSupportPage() {
               onChange={(e) => setIssueCategory(e.target.value)}
               required
             >
-              <option value=''>Select an issue</option>
-              <option value='Security concern'>Security concern</option>
-              <option value='Crash or freezing issue'>Crash or freezing issue</option>
-              <option value='Installation issue'>Installation issue</option>
-              <option value='Update or version issue'>Update or version issue</option>
-              <option value='Integration issue with third-party software'>
+              <option value="">Select an issue</option>
+              <option value="Security concern">Security concern</option>
+              <option value="Crash or freezing issue">
+                Crash or freezing issue
+              </option>
+              <option value="Installation issue">Installation issue</option>
+              <option value="Update or version issue">
+                Update or version issue
+              </option>
+              <option value="Integration issue with third-party software">
                 Integration issue with third-party software
               </option>
-              <option value='Performance issue'>Performance issue</option>
-              <option value='Bug report'>Bug report</option>
-              <option value='Other'>Other</option>
+              <option value="Performance issue">Performance issue</option>
+              <option value="Bug report">Bug report</option>
+              <option value="Other">Other</option>
             </select>
- 
+
             {/* Description */}
             <label>Description:</label>
             <textarea
               value={description}
               onChange={(e) => {
-                if (e.target.value.length <= 2000) setDescription(e.target.value);
-                else{
+                if (e.target.value.length <= 2000)
+                  setDescription(e.target.value);
+                else {
                   setDescription(e.target.value);
                 }
               }}
@@ -714,7 +873,12 @@ export default function TechSupportPage() {
               maxLength={10000}
               required
             />
-            <p style={{ fontSize: '12px', color: description.length >= 2000 ? 'red' : '#555' }}>
+            <p
+              style={{
+                fontSize: '12px',
+                color: description.length >= 2000 ? 'red' : '#555',
+              }}
+            >
               {description.length}/2000 characters
             </p>
             {description.length >= 2000 && (
@@ -722,24 +886,24 @@ export default function TechSupportPage() {
                 You've reached the maximum character limit.
               </p>
             )}
- 
+
             {/* Upload Images */}
             <label>Upload Images (up to 4, each img max 3 mb's):</label>
             <input
-              type='file'
+              type="file"
               multiple
-              accept='.jpg,.jpeg,.png,.gif'
+              accept=".jpg,.jpeg,.png,.gif"
               onChange={handleFileChange}
             />
- 
+
             {/* Previews */}
-            <div id='tech-filePreview'>
+            <div id="tech-filePreview">
               {previews.map((src, idx) => (
-                <div key={idx} className='tech-image-preview-container'>
+                <div key={idx} className="tech-image-preview-container">
                   <img src={src} alt={`Preview ${idx + 1}`} />
                   <button
-                    type='button'
-                    className='tech-remove-image-btn'
+                    type="button"
+                    className="tech-remove-image-btn"
                     onClick={() => handleRemoveImage(idx)}
                   >
                     ×
@@ -747,15 +911,15 @@ export default function TechSupportPage() {
                 </div>
               ))}
             </div>
- 
+
             {/* Buttons */}
-            <div className='tech-button-group'>
-              <button className='tech-buttons' type='submit'>
+            <div className="tech-button-group">
+              <button className="tech-buttons" type="submit">
                 Submit
               </button>
               <button
-                className='tech-buttons'
-                type='button'
+                className="tech-buttons"
+                type="button"
                 onClick={resetForm}
               >
                 Cancel
@@ -763,10 +927,10 @@ export default function TechSupportPage() {
             </div>
           </form>
         )}
- 
+
         {/* Message display */}
         {!formSubmittedSuccessfully && (
-          <div id='tech-message' style={{ color: messageColor }}>
+          <div id="tech-message" style={{ color: messageColor }}>
             {messageText}
           </div>
         )}
@@ -777,38 +941,44 @@ export default function TechSupportPage() {
   if (pageState === userPage) {
     return (
       <>
-        <div className='tech-client-requests-page'>
-          <h2 className='tech-client-requests-page-title'>My Requests</h2>
+        <div className="tech-client-requests-page">
+          <h2 className="tech-client-requests-page-title">My Requests</h2>
 
-          {error && <p className='tech-error'>{error}</p>}
+          {error && <p className="tech-error">{error}</p>}
 
           {isLoadingRequests ? (
-            <div className='tech-loading-messages'>
-              <div className='spinner'></div>
-              <p className='tech-loading-text'>Loading requests...</p>
+            <div className="tech-loading-messages">
+              <div className="spinner"></div>
+              <p className="tech-loading-text">Loading requests...</p>
             </div>
-          ) : requests.length === 0 ? ( 
-            <p className='tech-no-requests'>No requests yet.</p>
+          ) : requests.length === 0 ? (
+            <p className="tech-no-requests">No requests yet.</p>
           ) : (
-            <div className='tech-requests-list'>
+            <div className="tech-requests-list">
               {requests.map((req) => (
                 <div
                   key={req.id}
-                  className='tech-request-row'
-                  onClick={() => setSelectedRequest(req)}
+                  className="tech-request-row"
+                  onClick={() => {
+                    setSelectedRequest({ ...req });
+                    setRating(req.rating || 0);
+                    setShowRatingForm(req.status === 3 && req.rating === 0);
+                  }}
                 >
                   <span
-                    className={`tech-status-circle ${getStatusColor(req.status)}`}
+                    className={`tech-status-circle ${getStatusColor(
+                      req.status
+                    )}`}
                   ></span>
-                  <span className='tech-request-category'>{req.category}</span>
-                  <span className='tech-request-id'> Request #{req.id}</span>
+                  <span className="tech-request-category">{req.category}</span>
+                  <span className="tech-request-id"> Request #{req.id}</span>
                 </div>
               ))}
             </div>
           )}
 
-          <div className='tech-add-request-container'>
-            <button className='tech-buttons' onClick={handleAddRequest}>
+          <div className="tech-add-request-container">
+            <button className="tech-buttons" onClick={handleAddRequest}>
               Add Request +
             </button>
           </div>
@@ -818,53 +988,56 @@ export default function TechSupportPage() {
         {selectedRequest && (
           <>
             <div
-              className='tech-view-request-overlay'
+              className="tech-view-request-overlay"
               onClick={() => {
                 setSelectedRequest(null);
                 setEnlargedImage(null);
+                setShowRatingForm(false);
               }}
             ></div>
 
-            <div className='tech-view-request'>
-              <h3 className='tech-view-request-title'>
+            <div className="tech-view-request">
+              <h3 className="tech-view-request-title">
                 {selectedRequest.category || 'Request Category'}
               </h3>
-              <p className='tech-view-request-subtitle'>
-              Date: {selectedRequest?.date?.replace('T', ' At ').replace('Z', '').replace(/\.\d+$/, '') || 'Unknown'}
+              <p className="tech-view-request-subtitle">
+                Date:{' '}
+                {selectedRequest?.date
+                  ?.replace('T', ' At ')
+                  .replace('Z', '')
+                  .replace(/\.\d+$/, '') || 'Unknown'}
               </p>
-              <div className='tech-view-request-history'>
+              <div className="tech-view-request-history">
                 {isLoadingMessages ? (
-                  <div className='tech-loading-messages'>
-                    <div className='spinner'></div>
-                    <p className='tech-loading-text'>Loading messages...</p>
+                  <div className="tech-loading-messages">
+                    <div className="spinner"></div>
+                    <p className="tech-loading-text">Loading messages...</p>
                   </div>
                 ) : (
                   forumMessages.map((msg, idx) => (
-                    <p key={idx} className='tech-view-request-message'>
-                      <span className='tech-bold-label'>{msg.name}:</span>{' '}
+                    <p key={idx} className="tech-view-request-message">
+                      <span className="tech-bold-label">{msg.name}:</span>{' '}
                       {msg.content}
                     </p>
                   ))
                 )}
               </div>
               {selectedRequest.imgs && selectedRequest.imgs.length > 0 && (
-                <div className='tech-view-request-images'>
+                <div className="tech-view-request-images">
                   {selectedRequest.imgs.map((img, index) => {
                     if (!img || !img.data) return null;
-
                     const base64String = btoa(
                       new Uint8Array(img.data).reduce(
                         (data, byte) => data + String.fromCharCode(byte),
                         ''
                       )
                     );
-
                     return (
                       <img
                         key={index}
                         src={`data:image/jpeg;base64,${base64String}`}
                         alt={`Uploaded ${index + 1}`}
-                        className='tech-view-request-image'
+                        className="tech-view-request-image"
                         onClick={() => setEnlargedImage(base64String)}
                       />
                     );
@@ -873,20 +1046,20 @@ export default function TechSupportPage() {
               )}
               {enlargedImage && (
                 <div
-                  className='tech-image-modal'
-                  onClick={() => setEnlargedImage(null)} // click outside closes modal
+                  className="tech-image-modal"
+                  onClick={() => setEnlargedImage(null)}
                 >
                   <div
-                    className='tech-image-modal-content'
-                    onClick={(e) => e.stopPropagation()} // prevent click inside modal from closing it
+                    className="tech-image-modal-content"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     <img
                       src={`data:image/jpeg;base64,${enlargedImage}`}
-                      alt='Enlarged'
-                      className='tech-image-enlarged'
+                      alt="Enlarged"
+                      className="tech-image-enlarged"
                     />
                     <button
-                      className='tech-image-close-btn'
+                      className="tech-image-close-btn"
                       onClick={() => setEnlargedImage(null)}
                     >
                       ×
@@ -898,23 +1071,21 @@ export default function TechSupportPage() {
               {selectedRequest.status !== 3 ? (
                 <>
                   <textarea
-                    className='tech-view-request-textbox'
-                    placeholder='Write your reply here...'
+                    className="tech-view-request-textbox"
+                    placeholder="Write your reply here..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                   />
-
-                  <div className='tech-view-request-buttons'>
+                  <div className="tech-view-request-buttons">
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={handleSendMessage}
                       disabled={!newMessage.trim()}
                     >
                       Send
                     </button>
-
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={() => setSelectedRequest(null)}
                     >
                       Back
@@ -923,17 +1094,110 @@ export default function TechSupportPage() {
                 </>
               ) : (
                 <>
-                  <p className='tech-view-request-closed-msg'>
+                  <p className="tech-view-request-closed-msg">
                     This request is closed. No further messages can be sent.
                   </p>
-                  <div className='tech-view-request-buttons'>
+                  <div className="tech-view-request-buttons">
+                    {selectedRequest.rating === 0 && (
+                      <button
+                        className="tech-buttons"
+                        onClick={() => setShowRatingForm(true)}
+                      >
+                        Rate Our Service
+                      </button>
+                    )}
                     <button
-                      className='tech-buttons'
+                      className="tech-buttons"
                       onClick={() => setSelectedRequest(null)}
                     >
                       Back
                     </button>
                   </div>
+
+                  {/* Rating popup */}
+                  {showRatingForm && (
+                    <div
+                      className="tech-rating-overlay"
+                      onClick={() => setShowRatingForm(false)}
+                    >
+                      <div
+                        className="tech-rating-modal"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {!ratingSubmitted ? (
+                          <>
+                            <h3 className="tech-rating-title">
+                              Rate Our Service
+                            </h3>
+                            <p>Select 1 to 3 stars:</p>
+                            <div className="tech-rating-stars">
+                              {[1, 2, 3].map((star) => (
+                                <span
+                                  key={star}
+                                  className={`star ${
+                                    rating >= star ? 'selected' : ''
+                                  }`}
+                                  style={{
+                                    cursor: 'pointer',
+                                    color: rating >= star ? 'gold' : 'gray',
+                                    fontSize: '24px',
+                                    marginRight: '8px',
+                                  }}
+                                  onClick={() => setRating(star)}
+                                >
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                            <div className="tech-rating-buttons">
+                              <button
+                                className="tech-buttons"
+                                disabled={rating === 0}
+                                onClick={async () => {
+                                  await api.patch(
+                                    `/ts/techsupportrate?pid=${selectedRequest.id}&rating=${rating}`
+                                  );
+                                  setRatingSubmitted(true);
+                                  setSelectedRequest((prev) => ({
+                                    ...prev,
+                                    rating,
+                                  }));
+                                  setRequests((prev) =>
+                                    prev.map((req) =>
+                                      req.id === selectedRequest.id
+                                        ? { ...req, rating }
+                                        : req
+                                    )
+                                  );
+                                }}
+                              >
+                                Submit
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div
+                            style={{ textAlign: 'center', marginTop: '20px' }}
+                          >
+                            <p style={{ color: 'green', fontSize: '16px' }}>
+                              ✅ Thank you for your feedback!
+                            </p>
+                          </div>
+                        )}
+
+                        <button
+                          className="tech-buttons"
+                          onClick={() => {
+                            setShowRatingForm(false);
+                            setRatingSubmitted(false); // reset for next time
+                          }}
+                          style={{ marginTop: '20px' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -944,9 +1208,9 @@ export default function TechSupportPage() {
   }
 
   return (
-    <div className='home-container'>
+    <div className="home-container">
       <h2>Loading...</h2>
-      <img src='/loading-ts.gif'></img>
+      <img src="/loading-ts.gif"></img>
     </div>
   );
 }

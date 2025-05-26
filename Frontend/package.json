@@ -19,7 +19,8 @@
     "jest-environment-jsdom": "^29.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.4.1"
+    "react-router-dom": "^7.4.1",
+    "recharts": "^2.9.0"
   },
   "devDependencies": {
     "@babel/core": "^7.26.10",

@@ -27,3 +27,7 @@ export async function addOneDbAgent(email) {
 export async function getDbRequestFromOneUser(email) {
     return await db.getDbRequests(email);
 }
+
+export async function setDbRatingOnPost(pid, rating) {
+    return await db.rateDbService(pid, rating);
+}

@@ -29,7 +29,8 @@ async function initDB() {
     date TIMESTAMP NOT NULL,
     status INT NOT NULL,
     urgency INT NOT NULL,
-    imgs BYTEA[4]
+    imgs BYTEA[4],
+    rating INT DEFAULT 0
   );
 `;
 
@@ -367,6 +368,34 @@ export async function closeSupportRequestInDb(id) {
     };
   } catch (err) {
     console.error('[ ⚡ ] Error closing ticket:', err.message);
+    return {
+      success: false,
+      error: err.message,
+    };
+  }
+}
+
+export async function rateDbService(pid, rating) {
+  try {
+    const res = await pool.query(
+      'UPDATE tickets SET rating = $1 WHERE id = $2 RETURNING *',
+      [rating, pid]
+    );
+
+    if (res.rowCount === 0) {
+      return {
+        success: false,
+        error: `Ticket with id ${pid} does not exist.`,
+      };
+    }
+
+    console.log(`[ ⭐ ] Ticket ${pid} rated with ${rating} star(s).`);
+    return {
+      success: true,
+      ratedTicket: res.rows[0],
+    };
+  } catch (err) {
+    console.error('[ ⚡ ] Error rating ticket:', err.message);
     return {
       success: false,
       error: err.message,

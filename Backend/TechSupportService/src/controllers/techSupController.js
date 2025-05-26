@@ -1,6 +1,6 @@
 import { addDbAgent, isDbAgent, getForumMessagesFromDb,
   postForumMessageToDb, closeSupportRequestInDb} from '../data-access/db.js';
-import { getAllTechReports, deleteDbTicket, addDbTicket, editDbTicket, isDbAgentexist, addOneDbAgent, getDbRequestFromOneUser } from '../services/techSupportService.js';
+import { getAllTechReports, deleteDbTicket, addDbTicket, editDbTicket, isDbAgentexist, addOneDbAgent, getDbRequestFromOneUser, setDbRatingOnPost } from '../services/techSupportService.js';
 
 // get all tickets.
 export async function getTechSuppot(req, res) {
@@ -224,6 +224,29 @@ export async function closeSupportRequest(req, res) {
 
   try {
     const result = await closeSupportRequestInDb(id);
+
+    if (result.success) {
+      return res.status(200).json(result);
+    } else {
+      return res.status(404).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error closing ticket:', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// close a support request
+export async function editRatingOnDb(req, res) {
+  const id = parseInt(req.query.pid, 10);
+  const rating = parseInt(req.query.rating, 10);
+
+  if (isNaN(id) || isNaN(rating)) {
+    return res.status(400).json({ error: 'id or rating must be a valid number.' });
+  }
+
+  try {
+    const result = await setDbRatingOnPost(id, rating);
 
     if (result.success) {
       return res.status(200).json(result);
