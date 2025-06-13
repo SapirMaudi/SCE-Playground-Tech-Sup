@@ -1,0 +1,23 @@
+.product-details {
+  color: white;
+}
+
+.product-page {
+  position: relative;
+}
+
+.admin-buttons {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.button-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

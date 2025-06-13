@@ -1,6 +1,6 @@
 // gateway-service/src/middleware/errorHandler.js
 
-function errorHandler(err, req, res, next) {
+function errorHandler(err, req, res) {
     console.error('Gateway Error:', err.message);
   
     // If no specific status is assigned, default to 500

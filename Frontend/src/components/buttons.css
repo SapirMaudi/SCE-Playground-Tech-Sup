@@ -1,0 +1,18 @@
+.filter-sort-search {
+  background: linear-gradient(to right, #1abc9c, #b2fefa);
+  color: black;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(32, 178, 170, 0.6);
+  transition: background-color 0.3s, transform 0.3s;
+  width: 160px;
+}
+
+.filter-sort-search:hover {
+  color: white;
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(32, 178, 170, 0.6);
+}

@@ -45,7 +45,7 @@ export default function SignInPage() {
         alt='University Icon'
       />
 
-      <h3>Sign In</h3>
+      <h3 style={{ color: '#000' }}>Sign In</h3>
       {error && <p className='error-message'>{error}</p>}
       <form className='auth-form' onSubmit={handleSubmit}>
         <input type='email' value={email} placeholder='Email' onChange={e => setEmail(e.target.value)} required />

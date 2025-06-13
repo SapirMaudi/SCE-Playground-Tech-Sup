@@ -1,0 +1,48 @@
+name: CI - Product Service
+
+on:
+  push:
+    branches: ["main", "sprint-3"]
+    paths:
+      - "Backend/ProductService/**"
+  pull_request:
+    branches: ["main", "sprint-3"]
+    paths:
+      - "Backend/ProductService/**"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          cd Backend/ProductService
+          npm install
+
+      - name: Run Linter
+        run: |
+          cd Backend/ProductService
+          npm run lint
+
+      - name: Run Tests
+        run: |
+          cd Backend/ProductService
+          npm test
+        env:
+          POSTGRES_URI: postgresql://products_database_v2qd_user:IbLcEXHC97JzXcs0L6UJcpLip6sPKWmQ@dpg-d0jj6lmmcj7s7382ufmg-a.frankfurt-postgres.render.com/products_database_v2qd
+
+  deploy-to-render:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Deploy to Render
+        run: curl https://api.render.com/deploy/srv-cvk62cq4d50c73dk2i10?key=r6gQtstyo5w
